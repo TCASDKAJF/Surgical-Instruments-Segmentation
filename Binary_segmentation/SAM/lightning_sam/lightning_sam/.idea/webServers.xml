@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="2636f384-e6f0-48e6-89c7-53acb0290bce" name="lung_seg">
+        <fileTransfer rootFolder="/home/chenchangxiu/python_project/lighting_sam" accessType="SFTP" host="192.168.1.189" port="3225" sshConfigId="275e5347-9c33-4b85-abe7-777390d1ae9d" sshConfig="189" keyPair="true" />
+      </webServer>
+    </option>
+  </component>
+</project>
