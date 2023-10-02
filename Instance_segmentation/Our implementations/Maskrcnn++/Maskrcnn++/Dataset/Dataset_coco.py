@@ -47,11 +47,10 @@ class CocoDetection(data.Dataset):
         self.coco = COCO(self.anno_path)
         self.image_size = img_resize
 
-        # 获取coco数据索引与类别名称的关系
-        # 注意在object80中的索引并不是连续的，虽然只有80个类别，但索引还是按照stuff91来排序的
+        # Getting coco data indexes with category names
         data_classes = dict([(v["id"], v["name"]) for k, v in self.coco.cats.items()])
         max_index = max(data_classes.keys())  # 90
-        # 将缺失的类别名称设置成N/A
+        # set missing coco classes to "N/A"
         coco_classes = {}
         for k in range(0, max_index + 1):
             if k in data_classes:
@@ -70,7 +69,7 @@ class CocoDetection(data.Dataset):
 
         ids = list(sorted(self.coco.imgs.keys()))
         if dataset == "train":
-            # 移除没有目标，或者目标面积非常小的数据
+            # remove images without annotations
             valid_ids = coco_remove_images_without_annotations(self.coco, ids)
             self.ids = valid_ids
         else:
@@ -84,7 +83,7 @@ class CocoDetection(data.Dataset):
         assert w > 0
         assert h > 0
 
-        # 只筛选出单个对象的情况
+        # only keep annotations with width and height greater than 0
         anno = [obj for obj in coco_targets if obj['iscrowd'] == 0]
 
         boxes = [obj["bbox"] for obj in anno]
@@ -114,7 +113,7 @@ class CocoDetection(data.Dataset):
 
         new_bboxes = []
         for bbox in boxes:
-            bbox = self.xyxy_to_xywh(bbox)  # xyxy_to_xywh , 进行增强
+            bbox = self.xyxy_to_xywh(bbox)  # xyxy_to_xywh , enhance the performance
             new_bboxes.append(bbox)
         boxes = torch.tensor(new_bboxes)
 
@@ -150,7 +149,7 @@ class CocoDetection(data.Dataset):
         if self.xyxy:
             new_bboxes = []
             for bbox in boxes:
-                bbox = self.xywh_to_xyxy(bbox)  # 翻转对应bbox坐标信息
+                bbox = self.xywh_to_xyxy(bbox)  # flip xywh to xyxy
                 new_bboxes.append(bbox)
             boxes = torch.tensor(new_bboxes)
 
@@ -168,7 +167,7 @@ class CocoDetection(data.Dataset):
         # ([3, 720, 1280]) torch.Size([1, 720, 1280]) torch.Size([1, 1, 4])
         height, width = image.shape[-2:]
 
-        # 获取每一个label的对应增强概率，保持样本数量均衡
+        # Get the corresponding enhancement probability for each label, keeping the sample size balanced
         min_value = 4868
         for label in target_labels:
             if int(label) == 0:
@@ -182,7 +181,7 @@ class CocoDetection(data.Dataset):
         enhance_ratio = enhance_ratio / 185  # norm [0-1]
 
 
-        # 彩色图数据增强
+        # Color Map Data Enhancement
         image = F.adjust_gamma(image, gamma=random.uniform(0.8, 1.2))
         image = F.adjust_contrast(
             image, contrast_factor=random.uniform(0.8, 1.2))
@@ -193,7 +192,7 @@ class CocoDetection(data.Dataset):
         image = F.adjust_hue(image, hue_factor=random.uniform(-0.2, 0.2))
         image = F.adjust_sharpness(
             image, sharpness_factor=random.uniform(0.8, 1.2))
-        # 同步op
+        # Synchronized op
         image_mask = torch.cat([image, mask], dim=0)
 
         # if self.image_size:
@@ -224,7 +223,7 @@ class CocoDetection(data.Dataset):
 
             new_bboxes = []
             for bbox in bboxes:
-                bbox = self.rotate_bbox(bbox, width, height, angle)  # 修改对应bbox坐标信息
+                bbox = self.rotate_bbox(bbox, width, height, angle)  # edit corresponding bbox coordinates
                 new_bboxes.append(bbox)
             bboxes = torch.tensor(new_bboxes)
 
@@ -234,20 +233,19 @@ class CocoDetection(data.Dataset):
         return image, mask, bboxes
 
     def resize_bbox(self, bbox, img_width, img_height, new_width, new_height):
-        # bbox格式为[x_min, y_min, x_max, y_max]
-        # 返回缩放后的bbox
+        # The bbox format is [x_min, y_min, x_max, y_max].
+        # Returns the scaled bbox
         return [bbox[0] * new_width / img_width,
                 bbox[1] * new_height / img_height,
                 bbox[2] * new_width / img_width,
                 bbox[3] * new_height / img_height]
 
     def flip_bbox(self, bbox, img_width, img_height, mode):
-        # bbox格式为[x_min, y_min, width, height]
-        # mode为翻转模式，0为垂直翻转，1为水平翻转
-        # 返回翻转后的bbox
-        if mode == 0:  # 垂直翻转
+
+        # return flip_bbox
+        if mode == 0:  # vertical flip
             return [bbox[0], img_height - bbox[1] - bbox[3], bbox[2], bbox[3]]
-        elif mode == 1:  # 水平翻转
+        elif mode == 1:  # Horizontal Flip
             return [img_width - bbox[0] - bbox[2], bbox[1], bbox[2], bbox[3]]
         else:
             return bbox
@@ -262,12 +260,12 @@ class CocoDetection(data.Dataset):
         y3 = bbox[1] + bbox[3]
         x4 = bbox[0]
         y4 = bbox[1] + bbox[3]
-        # 计算旋转中心点坐标
+        # Calculate the coordinates of the center of rotation
         center_x = img_width // 2
         center_y = img_height // 2
-        # 计算旋转角度的弧度值
+        # Calculate the radian value of the rotation angle
         radian = math.radians(-angle)
-        # 计算旋转后的四个顶点坐标
+        # Calculate the coordinates of the four vertices after rotation
         x1_ = x1 * math.cos(radian) - y1 * math.sin(radian) + center_x - center_x * math.cos(
             radian) + center_y * math.sin(radian)
         y1_ = x1 * math.sin(radian) + y1 * math.cos(radian) + center_y - center_x * math.sin(
@@ -284,7 +282,7 @@ class CocoDetection(data.Dataset):
             radian) + center_y * math.sin(radian)
         y4_ = x4 * math.sin(radian) + y4 * math.cos(radian) + center_y - center_x * math.sin(
             radian) - center_y * math.cos(radian)
-        # 计算旋转后的bbox的左上角坐标和宽高
+        # Calculate the coordinates of the upper left corner and the width and height of the rotated bbox
         x_ = min(x1_, x2_, x3_, x4_)
         y_ = min(y1_, y2_, y3_, y4_)
         w_ = max(x1_, x2_, x3_, x4_) - min(x1_, x2_, x3_, x4_)
@@ -301,14 +299,12 @@ class CocoDetection(data.Dataset):
 
     @staticmethod
     def xywh_to_xyxy(bbox):
-        # bbox格式为[x_min, y_min, width, height]
-        # 返回转换后的bbox
+
         return [bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]]
 
     @staticmethod
     def xyxy_to_xywh(bbox):
-        # bbox格式为[x_min, y_min, x_max, y_max]
-        # 返回转换后的bbox
+
         return [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
 
     @staticmethod

@@ -290,9 +290,9 @@ class MaskRCNNHeads(nn.Sequential):
                                                   padding=dilation,
                                                   dilation=dilation)
             d[f"relu{layer_idx}"] = nn.ReLU(inplace=True)
-            # d[f"Swish{layer_idx}"] = Swish()                 # 这里替换为Swish
-            # d[f"se{layer_idx}"] = SEModule(layers_features)  # 添加SE模块
-            # d[f"cbam{layer_idx}"] = CBAM(layers_features)    # 添加CBAM模块
+            # d[f"Swish{layer_idx}"] = Swish()                 # change ReLU to Swish
+            # d[f"se{layer_idx}"] = SEModule(layers_features)  # SE Module
+            # d[f"cbam{layer_idx}"] = CBAM(layers_features)    # CBAM Module
             next_feature = layers_features
 
         super().__init__(d)
@@ -307,9 +307,9 @@ class MaskRCNNPredictor(nn.Sequential):
         super().__init__(OrderedDict([
             ("conv5_mask", nn.ConvTranspose2d(in_channels, dim_reduced, 2, 2, 0)),
             ("relu", nn.ReLU(inplace=True)),
-            ("Swish", Swish()),             # 这里替换为Swish
-            # ("se", SEModule(dim_reduced)),  # 添加SE模块
-            # ("cbam", CBAM(dim_reduced)),    # 添加CBAM模块
+            ("Swish", Swish()),             # change ReLU to Swish
+            # ("se", SEModule(dim_reduced)),  # SE Module
+            # ("cbam", CBAM(dim_reduced)),    # CBAM Module
             ("mask_fcn_logits", nn.Conv2d(dim_reduced, num_classes, 1, 1, 0))
         ]))
         # initial params
