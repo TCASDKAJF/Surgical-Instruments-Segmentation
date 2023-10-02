@@ -19,12 +19,12 @@ from torchvision.models.detection.rpn import AnchorGenerator
 stored_mAP = 0.0
 
 def create_model(num_classes, load_pretrain_weights=True, anchor_sizes=None):
-    # 使用默认的锚点尺寸，除非提供了其他值
+    # Use the default anchor size, unless another value is provided
     initial_anchors = [26, 62, 134, 286, 626]
     if anchor_sizes is None:
         anchor_sizes = tuple((size,) for size in initial_anchors)
 
-    # 创建一个新的锚点生成器
+    # create an anchor generator for the FPN
     rpn_anchor_generator = AnchorGenerator(
         sizes=anchor_sizes,
         aspect_ratios=((0.5, 1.0, 2.0),) * len(anchor_sizes)
@@ -33,7 +33,7 @@ def create_model(num_classes, load_pretrain_weights=True, anchor_sizes=None):
     backbone = swin_fpn_backbone("swin_tiny","/root/autodl-tmp/new_swin/Detection_Baseline_swin/Weight/swin_tiny.pth")
     # backbone = resnet50_fpn_backbone(pretrain_path="Weight/resnet50.pth", trainable_layers=3)
 
-    # 将新的锚点生成器传递给MaskRCNN模型
+    # Passing the new anchor generator to the MaskRCNN model
     model = MaskRCNN(backbone, num_classes=num_classes, rpn_anchor_generator=rpn_anchor_generator)
     # model = MaskRCNN(backbone, num_classes=num_classes)
     
@@ -51,23 +51,23 @@ def create_model(num_classes, load_pretrain_weights=True, anchor_sizes=None):
 
 
 def get_mAP_loss(*args):
-    global stored_mAP  # 声明为全局变量
+    global stored_mAP  # claim global variable
     return -stored_mAP
 
 
 def evaluate_with_anchors(anchor_sizes, train_data_loader, val_data_loader, model, optimizer, device, scaler):
 
-    # 使用给定的锚点尺寸创建模型
+    # use the given anchor sizes to update the model
     model = create_model(num_classes=args.num_classes + 1, load_pretrain_weights=args.pretrain, anchor_sizes=anchor_sizes)
     model.to(device)
 
-    # 训练模型（这里只进行一个epoch，但你可以根据需要进行更多的epoch）
+    # train the model for one epoch
     utils.train_one_epoch(model, optimizer, train_data_loader, device, 0, print_freq=50, warmup=True, scaler=scaler)
 
-    # 在验证集上评估模型
+    # validate the model
     det_info, _ = utils.evaluate(model, val_data_loader, device=device)
 
-    # 返回负的mAP作为损失（因为我们希望最大化mAP）
+    # Return negative mAP as a loss (since we want to maximize mAP)
     return -det_info[1]
 
 
@@ -83,28 +83,28 @@ def update_model_anchors(model, new_anchor_sizes):
     - model: The MaskRCNN model with updated anchor sizes.
     """
 
-    # 将新的锚点尺寸转换为适当的格式
+    # Convert the new anchor dimensions to the appropriate format
     anchor_sizes = tuple((size,) for size in new_anchor_sizes)
 
-    # 创建一个新的锚点生成器
+    # Create a new anchor generator
     rpn_anchor_generator = AnchorGenerator(
         sizes=anchor_sizes,
         aspect_ratios=((0.5, 1.0, 2.0),) * len(anchor_sizes)
     )
 
-    # 更新模型的锚点生成器
+    # Updating the model's anchor generator
     model.rpn.anchor_generator = rpn_anchor_generator
 
     return model
 
 
 def main(args):
-    global stored_mAP  # 声明为全局变量
+    global stored_mAP  # claim global variable
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print("Using {} device training.".format(device.type))
 
-    # 用来保存coco_info的文件
-    results_dir = "cbam_2/"  # 指定目录
+    # save coco_info
+    results_dir = "cbam_2/"  # Specify a directory
     now = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     det_results_file = f"{results_dir}det_results_swin{now}.txt"
     seg_results_file = f"{results_dir}seg_results_swin{now}.txt"
@@ -119,8 +119,8 @@ def main(args):
     # train_dataset = VOCInstances(data_root, year="2012", txt_name="train.txt", transforms=data_transform["train"])
     train_sampler = None
 
-    # 是否按图片相似高宽比采样图片组成batch
-    # 使用的话能够减小训练时所需GPU显存，默认使用
+    # Whether to compose a batch by sampling images with similar aspect ratios.
+    # This reduces the amount of GPU memory required for training, and is used by default.
     if args.aspect_ratio_group_factor >= 0:
         train_sampler = torch.utils.data.RandomSampler(train_dataset)
         # 统计所有图像高宽比例在bins区间中的位置索引
@@ -183,7 +183,7 @@ def main(args):
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                         milestones=args.lr_steps,
                                                         gamma=args.lr_gamma)
-    # 如果传入resume参数，即上次训练的权重地址，则接着上次的参数训练
+    # if resume training, load the last weights
     if args.resume:
         # If map_location is missing, torch.load will first load the module to CPU
         # and then copy each parameter to where it was saved,
@@ -191,7 +191,7 @@ def main(args):
         path = args.output_dir + '/' +f"model_{args.start_epoch}.pth"
 
         print(path)
-        checkpoint = torch.load(path, map_location='cpu')  # 读取之前保存的权重文件(包括优化器以及学习率策略)
+        checkpoint = torch.load(path, map_location='cpu')  # load checkpoint
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
@@ -215,14 +215,14 @@ def main(args):
 
         # write detection into txt
         with open(det_results_file, "a") as f:
-            # 写入的数据包括coco指标还有loss和learning rate
+            # write the data including coco index, loss and learning rate
             result_info = [f"{i:.4f}" for i in det_info + [mean_loss.item()]] + [f"{lr:.6f}"]
             txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
             f.write(txt + "\n")
 
         # write seg into txt
         with open(seg_results_file, "a") as f:
-            # 写入的数据包括coco指标还有loss和learning rate
+            # write the data including coco index, loss and learning rate
             result_info = [f"{i:.4f}" for i in seg_info + [mean_loss.item()]] + [f"{lr:.6f}"]
             txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
             f.write(txt + "\n")
@@ -240,18 +240,18 @@ def main(args):
         torch.save(save_files, "./save_weights/cbam_2/model_{}.pth".format(epoch))
         
         
-#         # 在每个epoch结束后，使用差分进化算法重新评估最佳的锚点尺寸
+#         # At the end of each epoch, the optimal anchor size is re-evaluated using a differential evolutionary algorithm
         if epoch % args.reevaluate_anchors_every == 0:  
             print("Re-evaluating anchor sizes...")
             initial_anchors = [26, 62, 134, 286, 626]
-            # 这里表示在你文件中给出的[26, 62, 134, 286, 626]的上下10浮动，如果想要浮动大一些可以修改
+            # Set the bounds for the anchor sizes
             bounds = [(anchor-10, anchor+10) for anchor in initial_anchors]
             stored_mAP = det_info[1]
             result = differential_evolution(get_mAP_loss, bounds)
             best_anchor_sizes = result.x
             print(f"Best anchor sizes found: {best_anchor_sizes}")
 
-            # 更新模型的锚点尺寸
+            # Update the model with the new anchor sizes
             model = update_model_anchors(model, best_anchor_sizes)
             model.to(device)
             
@@ -273,54 +273,54 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__)
 
-    # 训练设备类型
+    # Device
     parser.add_argument('--device', default='cuda:0', help='device')
-    # 训练数据集的根目录
+    # The root directory of the training dataset
     parser.add_argument('--data-path', default='/root/autodl-tmp/new_swin/Detection_Baseline_swin/data_new/coco', help='dataset')
-    # 检测目标类别数(不包含背景)
+    # Number of detection target categories (without background)
     parser.add_argument('--num-classes', default=16, type=int, help='num_classes')
-    # 文件保存地址
+    # File save address
     parser.add_argument('--output-dir', default='save_weights', help='path where to save')
-    # 若需要接着上次训练，则指定上次训练保存权重文件地址
+    # If you need to follow the last training, specify the address of the last training weights file.
     parser.add_argument('--resume', default=False, type=str, help='resume from checkpoint')
-    # 指定接着从哪个epoch数开始训练
+    # Specify the number of epochs to start training from.
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
-    # 训练的总epoch数
+    # Total number of epochs to train for
     parser.add_argument('--epochs', default=30, type=int, metavar='N',
                         help='number of total epochs to run')
-    # 学习率
+    # Learning rate
     parser.add_argument('--lr', default=0.0041, type=float,
                         help='initial learning rate, 0.02 is the default value for training '
                              'on 8 gpus and 2 images_per_gpu')
     
-    # 每多少个epoch更新一次你的锚点尺寸
+    # Update your anchor size every however many epochs!
     parser.add_argument('--reevaluate_anchors_every', type=int, default=3, 
                     help='Number of epochs after which to re-evaluate and adjust anchor sizes using differential evolution.')
 
-    # SGD的momentum参数
+    # SGD momentum
     parser.add_argument('--momentum', default=0.901, type=float, metavar='M',
                         help='momentum')
-    # SGD的weight_decay参数
+    # SGD Weight decay
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    # 针对torch.optim.lr_scheduler.MultiStepLR的参数
+    # Arguments against torch.optim.lr_scheduler.MultiStepLR
     parser.add_argument('--lr-steps', default=[16, 22], nargs='+', type=int,
                         help='decrease lr every step-size epochs')
-    # 针对torch.optim.lr_scheduler.MultiStepLR的参数
+    # Arguments against torch.optim.lr_scheduler.MultiStepLR
     parser.add_argument('--lr-gamma', default=0.1, type=float, help='decrease lr by a factor of lr-gamma')
-    # 训练的batch size(如果内存/GPU显存充裕，建议设置更大)
+    # Batch size for training (larger settings are recommended if memory/GPU graphics are plentiful)
     parser.add_argument('--batch_size', default=2, type=int, metavar='N',
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
     parser.add_argument("--pretrain", type=bool, default=True, help="load COCO pretrain weights.")
-    # 是否使用混合精度训练(需要GPU支持混合精度)
+    # Whether to train with mixed precision (requires GPU support for mixed pre
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
 
     args = parser.parse_args()
     print(args)
 
-    # 检查保存权重文件夹是否存在，不存在则创建
+    # Check if the save weights folder exists, create it if it doesn't
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 

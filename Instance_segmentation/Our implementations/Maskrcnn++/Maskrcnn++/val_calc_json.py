@@ -42,7 +42,7 @@ from matplotlib.colors import Normalize
 
 
 def delete_all_files(path):
-    """删除指定路径下的所有文件"""
+    """delete all files in the given path""" 
     for filename in os.listdir(path):
         file_path = os.path.join(path, filename)
         try:
@@ -63,14 +63,14 @@ def compute_confusion_matrix(true, pred, num_classes):
 
 def plot_confusion_matrix(cm, class_names, cmap=plt.cm.Blues):
     """
-    该函数打印并绘制混淆矩阵。
+    plot the confusion matrix.
     """
-    cm_normalized = normalize_confusion_matrix(cm) * 100  # 转换为百分比
+    cm_normalized = normalize_confusion_matrix(cm) * 100  # convert to percentage
     fig, ax = plt.subplots(figsize=(12, 10))
     im = ax.imshow(cm_normalized, interpolation='nearest', cmap=cmap)
     ax.figure.colorbar(im, ax=ax)
     
-    # 显示所有刻度，并设置标签
+    # display all ticks
     ax.set(xticks=np.arange(cm_normalized.shape[1]),
            yticks=np.arange(cm_normalized.shape[0]),
            xticklabels=class_names, yticklabels=class_names,
@@ -78,10 +78,10 @@ def plot_confusion_matrix(cm, class_names, cmap=plt.cm.Blues):
            ylabel="True label",
            xlabel="Predicted label")
 
-    # 旋转标签并设置对齐方式
+    # rotate the tick labels and set their alignment
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
-    # 循环遍历数据并在相应的位置添加文本
+    # reclcyle the figure to avoid overlapping
     for i in range(cm_normalized.shape[0]):
         for j in range(cm_normalized.shape[1]):
             ax.text(j, i, format(int(cm_normalized[i, j])) + "%",
@@ -180,7 +180,7 @@ def save_info(coco_evaluator, category_index, save_name, additional_info=""):
     print_voc = "\n".join(voc_map_info_list)
     print(print_voc)
 
-    # 将验证结果保存至txt文件中
+    # save info to txt file
     with open(save_name, "w") as f:
         record_lines = ["COCO results:",
                         print_coco,
@@ -198,20 +198,20 @@ def calculate_iou(box1, box2):
     x1, y1, x2, y2 = box1
     x1_p, y1_p, x2_p, y2_p = box2
 
-    # 计算交集的坐标
+    # calculate the intersect area
     xi1 = max(x1, x1_p)
     yi1 = max(y1, y1_p)
     xi2 = min(x2, x2_p)
     yi2 = min(y2, y2_p)
 
-    # 计算交集的面积
+    # compute the width and height of the bounding box
     inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
 
-    # 计算两个框的面积
+    # compute the area of both the prediction and ground-truth
     box1_area = (x2 - x1) * (y2 - y1)
     box2_area = (x2_p - x1_p) * (y2_p - y1_p)
 
-    # 计算并集的面积
+    # compute the intersection over union by taking the intersection
     union_area = box1_area + box2_area - inter_area
 
     # 计算IoU
@@ -221,19 +221,19 @@ def calculate_iou(box1, box2):
 
 
 def normalize_confusion_matrix(cm):
-    """归一化混淆矩阵的每一行，使其总和为1"""
+    """normalize confusion matrix"""
     row_sums = cm.sum(axis=1, keepdims=True)
     return cm / row_sums
 
 
 def move_background_to_end(cm, class_names):
-    # 将第一行移到最后
+    # move background to the end
     cm = np.vstack((cm[1:], cm[0]))
     
-    # 将第一列移到最后
+    # move background to the end
     cm = np.hstack((cm[:, 1:], cm[:, 0:1]))
 
-    # 调整类别标签
+    # category names
     class_names = class_names[1:] + [class_names[0]]
 
     return cm, class_names
@@ -241,7 +241,7 @@ def move_background_to_end(cm, class_names):
 
 def main(parser_data):
     
-    # 用来保存coco_info的文件
+    # save results to txt file
     now = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     det_results_file = f"det_results{now}.txt"
     seg_results_file = f"seg_results{now}.txt"
@@ -263,7 +263,7 @@ def main(parser_data):
 
     data_root = parser_data.data_path
 
-    # 注意这里的collate_fn是自定义的，因为读取的数据包括image和targets，不能直接使用默认的方法合成batch
+    # Note that the collate_fn here is customized because the data read includes images and targets, which can't be synthesized directly using the default method of batch synthesis
     batch_size = parser_data.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
     print('Using %g dataloader workers' % nw)
@@ -284,7 +284,7 @@ def main(parser_data):
     # backbone = resnet50_fpn_backbone(pretrain_path="Weight/resnet50.pth", trainable_layers=3)
     model = MaskRCNN(backbone, num_classes=args.num_classes + 1)
 
-    # 载入你自己训练好的模型权重
+    # load train weights
     weights_path = parser_data.weights_path
     assert os.path.exists(weights_path), "not found {} file.".format(weights_path)
     model.load_state_dict(torch.load(weights_path, map_location='cpu')['model'])
@@ -306,7 +306,7 @@ def main(parser_data):
     model.eval()
     with torch.no_grad():
         for image, targets in tqdm(val_dataset_loader, desc="validation..."):
-            # 将图片传入指定设备device
+            # upload data to device
             image = list(img.to(device) for img in image)
 
             # inference
@@ -321,15 +321,15 @@ def main(parser_data):
                 true_labels_list = target['labels'].tolist()
                 pred_labels_list = output.get('labels', []).tolist()
 
-                # 如果真实标签的数量大于预测标签的数量
+                # if ground truth label is empty, then skip
                 while len(pred_labels_list) < len(true_labels_list):
-                    pred_labels_list.append(0)  # 增加背景类标签
+                    pred_labels_list.append(0)  # increase the length of the predicted labels list
 
-                # 如果预测标签的数量大于真实标签的数量
+                # if predicted label is empty, then skip
                 while len(true_labels_list) < len(pred_labels_list):
-                    true_labels_list.append(0)  # 增加背景类标签
+                    true_labels_list.append(0)  # increase the length of the true labels list
 
-                # 现在，真实标签和预测标签的数量应该是相同的
+                # now both lists have the same length
                 for true_label, pred_label in zip(true_labels_list, pred_labels_list):
                     true_labels.append(true_label)
                     predicted_labels.append(pred_label)
@@ -351,14 +351,14 @@ def main(parser_data):
 
     # write detection into txt
     with open(det_results_file, "a") as f:
-        # 写入的数据包括coco指标还有loss和learning rate
+        # load coco metrics,loss and learning rate
         result_info = [f"{i:.4f}" for i in det_info + [mean_loss.item()]] + [f"{lr:.6f}"]
         txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
         f.write(txt + "\n")
 
     # write seg into txt
     with open(seg_results_file, "a") as f:
-        # 写入的数据包括coco指标还有loss和learning rate
+        # load coco metrics,loss and learning rate
         result_info = [f"{i:.4f}" for i in seg_info + [mean_loss.item()]] + [f"{lr:.6f}"]
         txt = "epoch:{} {}".format(epoch, '  '.join(result_info))
         f.write(txt + "\n")
@@ -383,22 +383,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__)
 
-    # 使用设备类型
+    # device
     parser.add_argument('--device', default='cuda', help='device')
 
-    # 检测目标类别数(不包含背景)
+    # detect categories number
     parser.add_argument('--num-classes', type=int, default=16, help='number of classes')
 
-    # 数据集的根目录
+    # root path of dataset
     parser.add_argument('--data-path', default='/root/autodl-tmp/new_swin/Detection_Baseline_swin/data_new/coco', help='dataset root')
 
-    # 训练好的权重文件
+    # weights path
     parser.add_argument('--weights-path', default='/root/autodl-tmp/new_swin/Detection_Baseline_swin/save_weights/cbam_1/model_29.pth', type=str, help='training weights')
 
     # batch size(set to 1, don't change)
     parser.add_argument('--batch-size', default=2, type=int, metavar='N',
                         help='batch size when validation.')
-    # 类别索引和类别名称对应关系
+    # category json file
     parser.add_argument('--label-json-path', type=str, default="coco91_indices.json")
 
     args = parser.parse_args()
